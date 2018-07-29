@@ -6,7 +6,6 @@ defmodule Triton.Schema do
   defmacro __using__(_) do
     quote do
       import Triton.Schema
-      import Triton.Helper, only: [type_validator: 1]
       use Triton.Executor
     end
   end

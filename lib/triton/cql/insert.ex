@@ -8,13 +8,42 @@ defmodule Triton.CQL.Insert do
   defp insert(fields, table, schema) when is_list(fields),
     do: "INSERT INTO #{table} (#{field_keys(fields)}) VALUES (#{field_values(fields, schema)})"
 
-  defp field_keys(fields) when is_list(fields),
-    do: fields |> Enum.map(fn {k, _} -> k end) |> Enum.join(", ")
+  defp field_keys(fields) when is_list(fields) do
+    fields
+    |> Enum.map(fn {k, _} -> k end)
+    |> Enum.join(", ")
+  end
 
-  defp field_values(fields, schema) when is_list(fields),
-    do: fields |> Enum.map(fn {k, v} -> field_value(v, schema[k][:type]) end) |> Enum.join(", ")
+  defp field_values(fields, schema) when is_list(fields) do
+    fields
+    |> Enum.map(fn {k, v} -> field_value(v, schema[k][:type]) end)
+    |> Enum.join(", ")
+  end
 
   defp field_value(nil, _), do: "NULL"
+
+  defp field_value([{:__metadata__, metadata} | _] = value, _) do
+    values =
+      value
+      |> Keyword.delete(:__metadata__)
+      |> Enum.map(fn {k, v} ->
+        "#{k}: " <> to_string(field_value(v, metadata.fields[k][:type]))
+      end)
+      |> Enum.join(", ")
+
+    ("{" <> values <> "}")
+    |> IO.inspect(label: "after nested object")
+  end
+
+  defp field_value([[{:__metadata__, _} | _] | _] = values, {_, subtype}) do
+    prepared_values =
+      values
+      |> Enum.map(&field_value(&1, subtype))
+      |> Enum.join(", ")
+
+    "[" <> prepared_values <> "]"
+  end
+
   defp field_value(field, {_, _}), do: field
   defp field_value(field, _) when is_boolean(field), do: "#{field}"
   defp field_value(field, _) when is_binary(field), do: binary_value(field)

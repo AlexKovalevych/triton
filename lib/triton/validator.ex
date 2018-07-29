@@ -44,13 +44,30 @@ defmodule Triton.Validator do
   defp coerce({:__metadata__, v}, _), do: {:__metadata__, v}
   defp coerce({k, v}, fields), do: {k, coerce(v, fields)}
 
+  defp coerce(%{__metadata__: _} = value, fields) do
+    value
+    |> Map.from_struct()
+    |> Enum.map(fn
+      {:__metadata__, v} -> {:__metadata__, v}
+      {k, v} -> coerce_fragment({k, v}, fields)
+    end)
+  end
+
   defp coerce(fragments, fields) when is_list(fragments),
     do: fragments |> Enum.map(fn fragment -> coerce_fragment(fragment, fields) end)
 
   defp coerce(non_list, _), do: non_list
 
   defp coerce_fragment({k, v}, fields) when is_list(v) do
-    {k, v |> Enum.map(fn {c, v} -> coerce_fragment({k, c, v}, fields) end)}
+    {k,
+     v
+     |> Enum.map(fn
+       {c, value} ->
+         coerce_fragment({k, c, value}, fields)
+
+       %{__metadata__: metadata} = value ->
+         coerce(value, metadata.fields)
+     end)}
   end
 
   defp coerce_fragment({k, v}, fields), do: {k, coerced_value(v, fields[k][:type])}
