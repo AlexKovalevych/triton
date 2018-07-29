@@ -10,22 +10,33 @@ defmodule Triton.Supervisor do
   """
   use Supervisor
 
-  def start_link(config), do: Supervisor.start_link(__MODULE__, config, name: Module.concat([__MODULE__, config[:conn]]))
+  def start_link(config),
+    do:
+      Supervisor.start_link(__MODULE__, config, name: Module.concat([__MODULE__, config[:conn]]))
 
   def init(config) do
     children = [
-      worker(Xandra, [[
-        {:name, config[:conn]},
-        {:after_connect, fn(conn) -> Xandra.execute(conn, "USE #{config[:keyspace]}") end}
-        | config
-      ]], [id: config[:conn]]),
-
-      worker(Triton.Monitor, [
-        config[:conn],
-        config[:keyspace],
-        config[:health_check_delay],
-        config[:health_check_interval]
-      ], [id: make_ref()])
+      worker(
+        Xandra,
+        [
+          [
+            {:name, config[:conn]},
+            {:after_connect, fn conn -> Xandra.execute(conn, "USE #{config[:keyspace]}") end}
+            | config
+          ]
+        ],
+        id: config[:conn]
+      ),
+      worker(
+        Triton.Monitor,
+        [
+          config[:conn],
+          config[:keyspace],
+          config[:health_check_delay],
+          config[:health_check_interval]
+        ],
+        id: make_ref()
+      )
     ]
 
     supervise(children, strategy: :one_for_all)

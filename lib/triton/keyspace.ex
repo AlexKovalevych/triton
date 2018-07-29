@@ -1,37 +1,38 @@
 defmodule Triton.Keyspace do
+  @moduledoc """
+  Defines keyspace struct with __metadata__ key
+  """
+
+  alias Triton.Metadata
+
   defmacro __using__(_) do
     quote do
       import Triton.Keyspace
     end
   end
 
-  defmacro keyspace(name, [conn: conn], [do: block]) do
+  defmacro keyspace(name, [conn: conn, pool: pool], do: block) do
     quote do
-      @after_compile __MODULE__
-
-      @keyspace []
-      @fields %{}
+      Module.put_attribute(__MODULE__, :metadata, %Metadata{
+        conn: unquote(conn),
+        pool: unquote(pool),
+        name: unquote(name),
+        keyspace: []
+      })
 
       unquote(block)
 
-      Module.put_attribute(__MODULE__, :keyspace, [
-        { :__conn__, unquote(conn) },
-        { :__name__, unquote(name) }
-        | Module.get_attribute(__MODULE__, :keyspace)
-      ])
+      defstruct __metadata__: Module.get_attribute(__MODULE__, :metadata)
 
-      def __after_compile__(_, _), do: Triton.Setup.Keyspace.setup(__MODULE__.__struct__)
-
-      defstruct Module.get_attribute(__MODULE__, :keyspace)
+      def metadata, do: @metadata
     end
   end
 
   defmacro with_options(opts) do
     quote do
-      Module.put_attribute(__MODULE__, :keyspace, [
-        { :__with_options__, unquote(opts) }
-        | Module.get_attribute(__MODULE__, :keyspace)
-      ])
+      metadata = Module.get_attribute(__MODULE__, :metadata)
+      keyspace = [{:__with_options__, unquote(opts)} | metadata.keyspace]
+      Module.put_attribute(__MODULE__, :metadata, %{metadata | keyspace: keyspace})
     end
   end
 end
