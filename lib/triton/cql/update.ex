@@ -1,25 +1,52 @@
 defmodule Triton.CQL.Update do
   def build(query) do
-    schema = query[:__schema__].__fields__
+    schema = query[:__metadata__].fields
+    table = query[:__metadata__].name
 
-    update(query[:__table__]) <>
-    set(query[:update], schema) <>
-    where(query[:where], schema) <>
-    constrain(query[:constrain], schema) <>
-    if_exists(query[:if_exists])
+    (update(table) <>
+       set(query[:update], schema) <>
+       where(query[:where], schema) <>
+       constrain(query[:constrain], schema) <> if_exists(query[:if_exists]))
+    |> IO.inspect()
   end
 
   defp update(table), do: "UPDATE #{table}"
-  defp set(assignments, schema) when is_list(assignments), do: " SET #{assignments |> Enum.map(fn {k, v} -> "#{k} = #{value(v, schema[k][:type])}" end) |> Enum.join(", ")}"
 
-  defp where(fragments, schema) when is_list(fragments), do: " WHERE " <> (fragments |> Enum.flat_map(fn fragment -> where_fragment(fragment, schema) end) |> Enum.join(" AND "))
+  defp set(assignments, schema) when is_list(assignments),
+    do:
+      " SET #{
+        assignments
+        |> Enum.map(fn {k, v} -> "#{k} = #{value(v, schema[k][:type])}" end)
+        |> Enum.join(", ")
+      }"
+
+  defp where(fragments, schema) when is_list(fragments),
+    do:
+      " WHERE " <>
+        (fragments
+         |> Enum.flat_map(fn fragment -> where_fragment(fragment, schema) end)
+         |> Enum.join(" AND "))
+
   defp where(_, _), do: ""
-  defp where_fragment({k, v}, schema) when is_list(v), do: v |> Enum.map(fn {c, v} -> where_fragment({k, c, v}, schema) end)
+
+  defp where_fragment({k, v}, schema) when is_list(v),
+    do: v |> Enum.map(fn {c, v} -> where_fragment({k, c, v}, schema) end)
+
   defp where_fragment({k, v}, schema), do: ["#{k} = #{value(v, schema[k][:type])}"]
-  defp where_fragment({k, :in, v}, schema), do: "#{k} IN (#{v |> Enum.map(fn v -> value(v, schema[k][:type]) end) |> Enum.join(", ")})"
+
+  defp where_fragment({k, :in, v}, schema),
+    do: "#{k} IN (#{v |> Enum.map(fn v -> value(v, schema[k][:type]) end) |> Enum.join(", ")})"
+
   defp where_fragment({k, c, v}, schema), do: "#{k} #{c} #{value(v, schema[k][:type])}"
 
-  defp constrain(constraints, schema) when is_list(constraints), do: " IF #{constraints |> Enum.map(fn {k, v} -> "#{k} = #{value(v, schema[k][:type])}" end) |> Enum.join(" AND ")}"
+  defp constrain(constraints, schema) when is_list(constraints),
+    do:
+      " IF #{
+        constraints
+        |> Enum.map(fn {k, v} -> "#{k} = #{value(v, schema[k][:type])}" end)
+        |> Enum.join(" AND ")
+      }"
+
   defp constrain(_, _), do: ""
 
   defp if_exists(flag) when flag == true, do: " IF EXISTS"
@@ -32,6 +59,13 @@ defmodule Triton.CQL.Update do
   defp value(v, _) when is_binary(v), do: binary_value(v)
   defp value(v, _) when is_atom(v), do: ":#{v}"
   defp value(%DateTime{} = d, _), do: DateTime.to_unix(d, :millisecond)
+
+  defp value(%NaiveDateTime{} = d, type) do
+    d
+    |> DateTime.from_naive!("Etc/UTC")
+    |> value(type)
+  end
+
   defp value(v, _), do: v
 
   defp binary_value(v) do

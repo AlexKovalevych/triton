@@ -41,10 +41,10 @@ defmodule Triton.Validator do
 
   def validate(_, query, _), do: {:ok, query}
 
-  defp coerce({:__metadata__, v}, _), do: {:__metadata__, v}
-  defp coerce({k, v}, fields), do: {k, coerce(v, fields)}
+  def coerce({:__metadata__, v}, _), do: {:__metadata__, v}
+  def coerce({k, v}, fields), do: {k, coerce(v, fields)}
 
-  defp coerce(%{__metadata__: _} = value, fields) do
+  def coerce(%{__metadata__: _} = value, fields) do
     value
     |> Map.from_struct()
     |> Enum.map(fn
@@ -53,10 +53,10 @@ defmodule Triton.Validator do
     end)
   end
 
-  defp coerce(fragments, fields) when is_list(fragments),
+  def coerce(fragments, fields) when is_list(fragments),
     do: fragments |> Enum.map(fn fragment -> coerce_fragment(fragment, fields) end)
 
-  defp coerce(non_list, _), do: non_list
+  def coerce(non_list, _), do: non_list
 
   defp coerce_fragment({k, v}, fields) when is_list(v) do
     {k,
@@ -68,6 +68,19 @@ defmodule Triton.Validator do
        %{__metadata__: metadata} = value ->
          coerce(value, metadata.fields)
      end)}
+  end
+
+  defp coerce_fragment({k, v}, fields) when is_map(v) do
+    {k,
+     v
+     |> Enum.map(fn
+       {c, %{__metadata__: metadata} = value} ->
+         {c, coerce(value, metadata.fields)}
+
+       {c, value} ->
+         coerce_fragment({k, c, value}, fields)
+     end)
+     |> Enum.into(%{})}
   end
 
   defp coerce_fragment({k, v}, fields), do: {k, coerced_value(v, fields[k][:type])}

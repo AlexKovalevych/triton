@@ -54,7 +54,7 @@ defmodule Triton.Executor do
       defp transform_results(query, results) when is_list(results) do
         for result <- results do
           for {k, v} <- result, into: %{} do
-            case query[:__schema__].__fields__[k][:opts][:transform] do
+            case query[:__metadata__].fields[k][:opts][:transform] do
               nil -> {k, v}
               func -> {k, func.(v)}
             end

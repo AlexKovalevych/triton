@@ -80,9 +80,11 @@ defmodule TritonTest do
                User
                |> insert(
                  id: "12345",
-                 friends: [
-                   %Friend{periods: [%Period{start: :os.system_time(:millisecond)}, %Period{}]}
-                 ]
+                 friends: %{
+                   "1" => %Friend{
+                     periods: [%Period{start: :os.system_time(:millisecond)}, %Period{}]
+                   }
+                 }
                )
                |> User.save()
     end
@@ -93,13 +95,93 @@ defmodule TritonTest do
                |> insert(
                  id: "12345",
                  email: "test@example.com",
-                 friends: [
-                   %Friend{
+                 friends: %{
+                   "1" => %Friend{
                      name: "foo",
                      periods: [%Period{start: :os.system_time(:millisecond)}]
                    }
-                 ]
+                 },
+                 aliases: %{"1" => "foo", "2" => "bar"}
                )
+               |> User.save()
+    end
+
+    test "success get user" do
+      User
+      |> insert(
+        id: "123",
+        email: "test@example.com",
+        friends: %{
+          "1" => %Friend{
+            name: "foo",
+            periods: [%Period{start: :os.system_time(:millisecond)}]
+          }
+        },
+        aliases: %{"1" => "foo", "2" => "bar"}
+      )
+      |> User.save()
+
+      assert {:ok,
+              %{
+                aliases: %{"1" => "foo", "2" => "bar"},
+                email: "test@example.com",
+                friends: %{
+                  "1" => %{
+                    "name" => "foo",
+                    "periods" => [
+                      %{"end" => nil, "start" => %DateTime{}}
+                    ]
+                  }
+                },
+                id: "123"
+              }} =
+               User
+               |> prepared(id: "123")
+               |> select([:id, :email, :friends, :aliases])
+               |> where(id: :id)
+               |> User.one()
+    end
+
+    test "success delete user" do
+      User
+      |> insert(id: "123", email: "test@example.com")
+      |> User.save()
+
+      assert {:ok, :success} =
+               User
+               |> prepared(id: "123")
+               |> delete(:all)
+               |> where(id: :id)
+               |> User.del()
+    end
+
+    test "success update user" do
+      assert {:ok, :success} =
+               User
+               |> insert(
+                 id: "12",
+                 email: "test@example.com",
+                 aliases: %{"1" => "foo", "2" => "bar"},
+                 friends: %{
+                   "1" => %Friend{
+                     name: "foo",
+                     periods: [%Period{start: :os.system_time(:millisecond)}]
+                   }
+                 }
+               )
+               |> User.save()
+
+      assert {:ok, :success} =
+               User
+               |> update(
+                 email: "test2@example.com",
+                 aliases: "aliases + {'3': 'baz'}",
+                 friends:
+                   "friends + {'2': {name:  'bar', periods: [{start: #{
+                     :os.system_time(:millisecond)
+                   }}]}}"
+               )
+               |> where(id: "12")
                |> User.save()
     end
   end
